@@ -1,0 +1,39 @@
+{
+  "tools": [
+    {
+      "name": "get_encrypted_health_factor",
+      "description": "Retrieves the encrypted health factor (collateral/debt ratio) for a user",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "userAddress": { "type": "string", "description": "Ethereum address of the user" }
+        },
+        "required": ["userAddress"]
+      }
+    },
+    {
+      "name": "execute_confidential_repayment",
+      "description": "Executes an encrypted repayment to reduce a user's debt",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "userAddress": { "type": "string", "description": "Ethereum address of the user" },
+          "encryptedAmount": { "type": "string", "description": "Encrypted repayment amount" }
+        },
+        "required": ["userAddress", "encryptedAmount"]
+      }
+    },
+    {
+      "name": "originate_confidential_loan",
+      "description": "Originates a new encrypted loan for a user",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "userAddress": { "type": "string", "description": "Ethereum address of the user" },
+          "encryptedAmount": { "type": "string", "description": "Encrypted loan amount" }
+        },
+        "required": ["userAddress", "encryptedAmount"]
+      }
+    }
+  ]
+}
