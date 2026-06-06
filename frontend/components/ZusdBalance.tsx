@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
 import { getZusdContract } from "@/lib/contracts";
-import { CONTRACT_ADDRESSES } from "@/lib/config";
 
 interface ZusdBalanceProps {
   signer: ethers.Signer | null;
@@ -17,11 +16,6 @@ export default function ZusdBalance({ signer, userAddress }: ZusdBalanceProps) {
 
   const fetchBalance = useCallback(async () => {
     if (!signer || !userAddress) return;
-    // Skip if ZUSD is not deployed yet (zero address)
-    if (CONTRACT_ADDRESSES.ZUSD === "0x0000000000000000000000000000000000000000") {
-      setBalance("—");
-      return;
-    }
     try {
       const contract = getZusdContract(signer);
       const bal = await contract.balanceOf(userAddress);
@@ -40,10 +34,6 @@ export default function ZusdBalance({ signer, userAddress }: ZusdBalanceProps) {
 
   const handleFaucet = async () => {
     if (!signer) return;
-    if (CONTRACT_ADDRESSES.ZUSD === "0x0000000000000000000000000000000000000000") {
-      alert("ZUSD contract not deployed yet. Run: npx hardhat deploy-zusd --network eth-sepolia");
-      return;
-    }
     setIsMinting(true);
     setTxHash(null);
     try {
