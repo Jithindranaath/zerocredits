@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { ethers } from "ethers";
-import { getCreditEngineContract, simulateEncryption, generateEncryptedHandle } from "@/lib/contracts";
-import { getTxLink } from "@/lib/config";
+import { getFrontendContract, generateEncryptedHandle } from "@/lib/contracts";
+import { CONTRACT_ADDRESSES, getTxLink } from "@/lib/config";
+import { ZERO_CREDIT_FRONTEND_ABI } from "@/lib/contracts";
 
 interface CreditScoreProps {
   signer: ethers.Signer | null;
 }
 
-type Status = "idle" | "encrypting" | "sending" | "confirming" | "success" | "error";
+type Status = "idle" | "fetching" | "encrypting" | "sending" | "confirming" | "success" | "error";
 
 export default function CreditScore({ signer }: CreditScoreProps) {
   const [repaymentScore, setRepaymentScore] = useState("");
@@ -19,6 +20,62 @@ export default function CreditScore({ signer }: CreditScoreProps) {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [encryptedResult, setEncryptedResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [historyInfo, setHistoryInfo] = useState<string | null>(null);
+
+  const calculateFromHistory = async () => {
+    if (!signer) return;
+    setError(null);
+    setHistoryInfo(null);
+    setStatus("fetching");
+
+    try {
+      const provider = signer.provider;
+      if (!provider) throw new Error("No provider available");
+
+      const userAddress = await signer.getAddress();
+
+      // Create a read-only contract instance to query events
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESSES.ZeroCreditFrontend,
+        ZERO_CREDIT_FRONTEND_ABI,
+        provider
+      );
+
+      // Query past events for this user (last ~100k blocks for Sepolia coverage)
+      const currentBlock = await provider.getBlockNumber();
+      const fromBlock = Math.max(0, currentBlock - 100000);
+
+      const loanFilter = contract.filters.LoanOriginated(userAddress);
+      const repayFilter = contract.filters.DebtRepaid(userAddress);
+
+      const [loanEvents, repayEvents] = await Promise.all([
+        contract.queryFilter(loanFilter, fromBlock, currentBlock),
+        contract.queryFilter(repayFilter, fromBlock, currentBlock),
+      ]);
+
+      const loanCount = loanEvents.length;
+      const repayCount = repayEvents.length;
+
+      // Calculate scores from on-chain history
+      // repaymentScore: each repay adds 20 points, max 100
+      const calcRepayment = Math.min(100, repayCount * 20);
+      // collateralRatio: ratio of repays to loans, scaled to 100
+      const calcCollateral = Math.min(100, Math.floor((repayCount / Math.max(loanCount, 1)) * 100));
+      // activityScore: total activity (loans + repays) * 10, max 100
+      const calcActivity = Math.min(100, (loanCount + repayCount) * 10);
+
+      setRepaymentScore(calcRepayment.toString());
+      setCollateralRatio(calcCollateral.toString());
+      setActivityScore(calcActivity.toString());
+      setHistoryInfo(
+        `Found ${loanCount} loan(s) and ${repayCount} repayment(s) on-chain for your address.`
+      );
+      setStatus("idle");
+    } catch (err: any) {
+      setStatus("error");
+      setError(err?.message || "Failed to fetch on-chain history");
+    }
+  };
 
   const computeCreditLine = async () => {
     if (!signer || !repaymentScore || !collateralRatio || !activityScore) return;
@@ -33,7 +90,6 @@ export default function CreditScore({ signer }: CreditScoreProps) {
 
       // Step 2: Send REAL transaction via MetaMask
       setStatus("sending");
-      const { getFrontendContract } = await import("@/lib/contracts");
       const contract = getFrontendContract(signer);
       const tx = await contract.demoComputeCreditLine(
         parseInt(repaymentScore),
@@ -71,6 +127,23 @@ export default function CreditScore({ signer }: CreditScoreProps) {
       </div>
 
       <div className="space-y-3">
+        {/* Calculate from History Button */}
+        <button
+          onClick={calculateFromHistory}
+          disabled={!signer || isDisabled}
+          className="w-full py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 
+                     text-indigo-300 font-medium rounded-lg transition-all text-sm
+                     disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {status === "fetching" ? "📡 Fetching on-chain history..." : "📊 Calculate from On-Chain History"}
+        </button>
+
+        {historyInfo && (
+          <div className="p-2 bg-indigo-900/20 border border-indigo-700/30 rounded-lg">
+            <p className="text-[11px] text-indigo-300">{historyInfo}</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="block text-[11px] font-medium text-gray-400 mb-1">

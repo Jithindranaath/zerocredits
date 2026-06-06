@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
+import { useAccount } from "wagmi";
 import WalletConnect from "@/components/WalletConnect";
 import LoanPanel from "@/components/LoanPanel";
 import RepayPanel from "@/components/RepayPanel";
@@ -9,35 +10,43 @@ import HealthFactor from "@/components/HealthFactor";
 import CreditScore from "@/components/CreditScore";
 import OwnerDecrypt from "@/components/OwnerDecrypt";
 import AiChat from "@/components/AiChat";
+import ZusdBalance from "@/components/ZusdBalance";
 import { CONTRACT_ADDRESSES, getEtherscanLink } from "@/lib/config";
 import { getLendingContract } from "@/lib/contracts";
 
 export default function Home() {
+  const { address, isConnected } = useAccount();
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
-  const [userAddress, setUserAddress] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
 
-  const handleConnect = async (address: string, newSigner: ethers.Signer) => {
-    setUserAddress(address);
-    setSigner(newSigner);
+  useEffect(() => {
+    async function setupSigner() {
+      if (isConnected && address && typeof window !== "undefined" && (window as any).ethereum) {
+        try {
+          const provider = new ethers.BrowserProvider((window as any).ethereum);
+          const s = await provider.getSigner();
+          setSigner(s);
 
-    // Check if connected wallet is the contract owner
-    try {
-      const contract = getLendingContract(newSigner);
-      const owner = await contract.owner();
-      setIsOwner(owner.toLowerCase() === address.toLowerCase());
-    } catch {
-      // Fallback: check against known deployer address (demo mode)
-      const KNOWN_OWNER = "0xccEF39b7e2081b9c814DBbf0e51D450DdaBB64a2".toLowerCase();
-      setIsOwner(address.toLowerCase() === KNOWN_OWNER);
+          // Check if connected wallet is the contract owner
+          try {
+            const contract = getLendingContract(s);
+            const owner = await contract.owner();
+            setIsOwner(owner.toLowerCase() === address.toLowerCase());
+          } catch {
+            const KNOWN_OWNER = "0xccEF39b7e2081b9c814DBbf0e51D450DdaBB64a2".toLowerCase();
+            setIsOwner(address.toLowerCase() === KNOWN_OWNER);
+          }
+        } catch {
+          setSigner(null);
+          setIsOwner(false);
+        }
+      } else {
+        setSigner(null);
+        setIsOwner(false);
+      }
     }
-  };
-
-  const handleDisconnect = () => {
-    setSigner(null);
-    setUserAddress(null);
-    setIsOwner(false);
-  };
+    setupSigner();
+  }, [address, isConnected]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -59,18 +68,20 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* ZUSD Balance */}
+            <ZusdBalance signer={signer} userAddress={address || null} />
             {/* FHE Badge */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-primary-900/30 border border-primary-700/30 rounded-full">
               <div className="w-2 h-2 rounded-full bg-primary-400 animate-pulse-slow" />
               <span className="text-xs text-primary-300 font-medium">FHE Encrypted</span>
             </div>
-            <WalletConnect onConnect={handleConnect} onDisconnect={handleDisconnect} />
+            <WalletConnect />
           </div>
         </div>
       </header>
 
       {/* Hero Banner */}
-      {!userAddress && (
+      {!address && (
         <div className="max-w-7xl mx-auto px-6 py-16 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary-900/30 border border-primary-700/30 rounded-full mb-6">
             <span className="text-primary-300 text-sm">🔐 Powered by Fully Homomorphic Encryption</span>
@@ -103,13 +114,13 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full">
-        {userAddress && (
+        {address && (
           <>
             {/* Connected status */}
             <div className="mb-8 p-4 bg-gray-900/50 border border-gray-800 rounded-xl flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">Connected as</p>
-                <p className="font-mono text-sm text-white">{userAddress}</p>
+                <p className="font-mono text-sm text-white">{address}</p>
               </div>
               {isOwner && (
                 <span className="px-3 py-1 bg-primary-900/50 border border-primary-600/50 rounded-full text-xs text-primary-300 font-medium">
@@ -122,7 +133,7 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <LoanPanel signer={signer} />
               <RepayPanel signer={signer} />
-              <HealthFactor signer={signer} userAddress={userAddress} />
+              <HealthFactor signer={signer} userAddress={address || null} />
               <CreditScore signer={signer} />
             </div>
 

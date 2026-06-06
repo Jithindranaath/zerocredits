@@ -93,6 +93,28 @@ export function getCreditEngineContract(signerOrProvider: ethers.Signer | ethers
   );
 }
 
+// ZUSD Token ABI
+export const ZUSD_ABI = [
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function faucet(uint256 amount) external",
+  "function mint(address to, uint256 amount) external",
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+];
+
+export function getZusdContract(signerOrProvider: ethers.Signer | ethers.Provider) {
+  return new ethers.Contract(
+    CONTRACT_ADDRESSES.ZUSD,
+    ZUSD_ABI,
+    signerOrProvider
+  );
+}
+
 // Simulate FHE encryption for demo purposes
 // In production, this would use the CoFHE SDK to encrypt client-side
 export function simulateEncryption(value: number): { data: string; securityZone: number } {
